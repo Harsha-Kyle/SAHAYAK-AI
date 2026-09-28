@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { BotIcon, ClockIcon, LogOutIcon, MicIcon, SendIcon, SparklesIcon, SquareIcon, UserIcon } from 'lucide-react';
+import { AlertCircleIcon, BotIcon, CheckCircleIcon, ClockIcon, ExternalLinkIcon, LogOutIcon, MicIcon, SendIcon, SparklesIcon, SquareIcon, UserIcon } from 'lucide-react';
 import { AnswerCard } from '../components/assistant/AnswerCard';
 import { ListenButton } from '../components/assistant/ListenButton';
 import { useApp, useL, useT } from '../contexts/AppContext';
 import { answers } from '../data/answers';
 import { useSpeech } from '../hooks/useSpeech';
+import { sendChatMessage, ChatSource } from '../services/api';
 import { Answer, ModuleId } from '../types/app';
 import { getLanguage } from '../utils/lookup';
 
@@ -15,6 +16,12 @@ interface ChatMessage {
   sender: 'user' | 'ai';
   text?: string;
   answer?: Answer;
+  // Real backend response fields
+  apiAnswer?: string;
+  apiSources?: ChatSource[];
+  apiConfidence?: number;
+  apiLanguage?: string;
+  apiError?: boolean;
   timestamp: string;
 }
 
@@ -109,7 +116,7 @@ export function Chatbot() {
     setIsListening(false);
   };
 
-  const handleUserSubmit = (queryText: string, forcedModule?: ModuleId) => {
+  const handleUserSubmit = async (queryText: string, forcedModule?: ModuleId) => {
     if (!queryText.trim()) return;
 
     stopListening();
@@ -127,49 +134,62 @@ export function Chatbot() {
     setMessages((prev) => [...prev, userMsg]);
     setIsThinking(true);
 
-    // Match query to sample answers or generate default
+    // Guess module for session tracking (best-effort, before API responds)
     const lower = queryText.toLowerCase();
-    let matchedAnswer: Answer | undefined;
+    let guessedModule: ModuleId = 'schemes';
+    if (lower.includes('kcc') || lower.includes('loan')) guessedModule = 'finance';
+    else if (lower.includes('pacs') || lower.includes('cooperative') || lower.includes('member')) guessedModule = 'cooperative';
+    else if (lower.includes('grievance') || lower.includes('complaint')) guessedModule = 'grievance';
+    else if (lower.includes('law') || lower.includes('act') || lower.includes('rule')) guessedModule = 'law';
+    if (forcedModule) guessedModule = forcedModule;
 
-    if (forcedModule) {
-      matchedAnswer = answers.find((a) => a.module === forcedModule);
-    } else if (lower.includes('pm-kisan') || lower.includes('kisan') || lower.includes('eligible') || lower.includes('money')) {
-      matchedAnswer = answers.find((a) => a.id === 'pmkisan');
-    } else if (lower.includes('insure') || lower.includes('crop') || lower.includes('paddy') || lower.includes('pmfby')) {
-      matchedAnswer = answers.find((a) => a.id === 'pmfby');
-    } else if (lower.includes('kcc') || lower.includes('loan') || lower.includes('card')) {
-      matchedAnswer = answers.find((a) => a.id === 'kcc');
-    } else if (lower.includes('pacs') || lower.includes('cooperative') || lower.includes('member')) {
-      matchedAnswer = answers.find((a) => a.id === 'pacs-membership');
-    } else if (lower.includes('dividend') || lower.includes('profit')) {
-      matchedAnswer = answers.find((a) => a.id === 'coop-dividend');
-    } else {
-      matchedAnswer = answers[0]; // default to PM-KISAN
-    }
+    try {
+      // ── Real API Call ─────────────────────────────────────────────────────
+      const result = await sendChatMessage({
+        message: queryText,
+        language: language,
+        session_id: currentSession.id,
+      });
 
-    const targetModule: ModuleId = matchedAnswer?.module || 'schemes';
-    const answerTitle = matchedAnswer ? L(matchedAnswer.title) : 'Government Scheme Info';
-
-    // Record query in AppContext session & increment topic count
-    recordQueryInSession({
-      question: queryText,
-      answerTitle,
-      module: targetModule,
-    });
-
-    // Simulate AI response generation
-    setTimeout(() => {
       setIsThinking(false);
+
       const aiMsgId = `ai-${Date.now()}`;
       const aiMsg: ChatMessage = {
         id: aiMsgId,
         sender: 'ai',
-        answer: matchedAnswer,
+        apiAnswer: result.answer,
+        apiSources: result.sources,
+        apiConfidence: result.confidence,
+        apiLanguage: result.language,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-    }, 1300);
+
+      // Record query in session & increment topic counter
+      recordQueryInSession({
+        question: queryText,
+        answerTitle: result.answer.substring(0, 60),
+        module: guessedModule,
+      });
+
+    } catch (err) {
+      console.error('Backend API error:', err);
+      setIsThinking(false);
+
+      // Show error message in chat
+      const errMsgId = `ai-err-${Date.now()}`;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: errMsgId,
+          sender: 'ai',
+          apiError: true,
+          apiAnswer: 'Sorry, I could not connect to the server. Please check the backend is running and try again.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    }
   };
 
   const handleEndSession = () => {
@@ -264,6 +284,60 @@ export function Chatbot() {
                       }
                       headingTag="h2"
                     />
+                  </div>
+                )}
+
+                {/* ── Real Backend (Gemini) Answer ─────────────────────── */}
+                {msg.apiAnswer && (
+                  <div className={`mt-1 rounded-2xl border shadow-sm px-4 py-3 text-body ${
+                    msg.apiError
+                      ? 'border-red-200 bg-red-50 text-red-700'
+                      : 'border-line bg-paper text-ink rounded-tl-none'
+                  }`}>
+                    {/* Error / OK icon row */}
+                    <div className="flex items-center gap-2 mb-2">
+                      {msg.apiError
+                        ? <AlertCircleIcon className="h-4 w-4 text-red-500 shrink-0" />
+                        : <CheckCircleIcon className="h-4 w-4 text-emerald-500 shrink-0" />
+                      }
+                      {!msg.apiError && msg.apiConfidence !== undefined && (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          msg.apiConfidence >= 0.8
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : msg.apiConfidence >= 0.5
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {Math.round(msg.apiConfidence * 100)}% confident
+                        </span>
+                      )}
+                      {!msg.apiError && (
+                        <span className="ml-auto text-[10px] text-muted font-medium uppercase tracking-wide">
+                          Gemini AI
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Answer text */}
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.apiAnswer}</p>
+
+                    {/* Source citations */}
+                    {!msg.apiError && msg.apiSources && msg.apiSources.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {msg.apiSources.map((src, i) => (
+                          <a
+                            key={i}
+                            href={src.source_url ?? '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand-tint px-2.5 py-0.5 text-[11px] font-semibold text-brand-dark hover:bg-brand/10 transition-colors"
+                          >
+                            <ExternalLinkIcon className="h-3 w-3" />
+                            {src.title}{src.section ? ` — ${src.section}` : ''}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
