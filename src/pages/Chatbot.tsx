@@ -311,11 +311,6 @@ export function Chatbot() {
                           {Math.round(msg.apiConfidence * 100)}% confident
                         </span>
                       )}
-                      {!msg.apiError && (
-                        <span className="ml-auto text-[10px] text-muted font-medium uppercase tracking-wide">
-                          Gemini AI
-                        </span>
-                      )}
                     </div>
 
                     {/* Answer text */}
@@ -325,21 +320,31 @@ export function Chatbot() {
                     {!msg.apiError && msg.apiSources && msg.apiSources.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {msg.apiSources.map((src, i) => (
-                          <a
-                            key={i}
-                            href={src.source_url ?? '#'}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand-tint px-2.5 py-0.5 text-[11px] font-semibold text-brand-dark hover:bg-brand/10 transition-colors"
-                          >
-                            <ExternalLinkIcon className="h-3 w-3" />
-                            {src.title}{src.section ? ` — ${src.section}` : ''}
-                          </a>
+                          src.source_url && src.source_url !== '#' ? (
+                            <a
+                              key={i}
+                              href={src.source_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand-tint px-2.5 py-0.5 text-[11px] font-semibold text-brand-dark hover:bg-brand/10 transition-colors"
+                            >
+                              <ExternalLinkIcon className="h-3 w-3" />
+                              {src.title}{src.section ? ` — ${src.section}` : ''}
+                            </a>
+                          ) : (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700"
+                            >
+                              📜 {src.title}{src.section ? ` — ${src.section}` : ''}
+                            </span>
+                          )
                         ))}
                       </div>
                     )}
                   </div>
                 )}
+
 
                 <span className="mt-1 block text-[11px] font-medium text-muted">{msg.timestamp}</span>
               </div>
