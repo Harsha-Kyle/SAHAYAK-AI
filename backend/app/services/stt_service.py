@@ -2,25 +2,28 @@ import os
 import tempfile
 import logging
 from typing import Tuple
+from app.core.config import settings
 
 logger = logging.getLogger("sahayak.stt")
 
 class STTService:
-    def __init__(self):
-        self.api_key = os.getenv("ASSEMBLYAI_API_KEY", "")
+    def get_api_key(self) -> str:
+        return settings.ASSEMBLYAI_API_KEY or os.getenv("ASSEMBLYAI_API_KEY", "")
 
     def transcribe_audio(self, audio_bytes: bytes, language: str = None) -> Tuple[str, str]:
         """
         Transcribe raw audio bytes using AssemblyAI SDK.
         Supports automatic language detection across Indian languages.
         """
-        if not self.api_key:
+        api_key = self.get_api_key()
+        if not api_key:
             logger.warning("ASSEMBLYAI_API_KEY not configured. Returning fallback transcription.")
             return "Am I eligible for PM-KISAN money?", (language or "en")
 
         try:
             import assemblyai as aai
-            aai.settings.api_key = self.api_key
+            aai.settings.api_key = api_key
+
 
             # Write audio bytes to temporary file for AssemblyAI SDK
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
@@ -28,9 +31,9 @@ class STTService:
                 temp_path = temp_audio.name
 
             try:
+                # ALWAYS use automatic language detection so user can speak any language regardless of UI setting
                 config = aai.TranscriptionConfig(
-                    language_detection=True if not language else False,
-                    language_code=language if language and language != "auto" else None
+                    language_detection=True
                 )
 
                 transcriber = aai.Transcriber()
@@ -41,15 +44,18 @@ class STTService:
                     return "Am I eligible for PM-KISAN money?", (language or "en")
 
                 text = transcript.text or ""
-                # AssemblyAI language detection code
-                detected_lang = getattr(transcript, "language_code", language or "en") or "en"
+                
+                # Double-check language via Unicode script detection on transcribed text
+                from app.services.language_service import language_service
+                detected_lang = language_service.detect_language(text)
 
-                logger.info(f"AssemblyAI STT Success: '{text[:50]}...' (Language: {detected_lang})")
+                logger.info(f"AssemblyAI STT Success: '{text[:50]}...' (Detected Language: {detected_lang})")
                 return text.strip(), detected_lang
 
             finally:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
+
 
         except Exception as e:
             logger.error(f"AssemblyAI STT Exception: {e}")

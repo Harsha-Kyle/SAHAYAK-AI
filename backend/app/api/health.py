@@ -34,8 +34,9 @@ def health_check(db: Session = Depends(get_db)):
             "url_configured": settings.DATABASE_URL.split("@")[-1] if "@" in settings.DATABASE_URL else "local_sqlite"
         },
         "services": {
-            "ollama_llm": f"{settings.OLLAMA_BASE_URL} ({settings.OLLAMA_MODEL})",
-            "stt_whisper": settings.STT_MODEL,
+            "llm_engine": "Gemini 1.5 Flash (Primary)",
+            "stt_engine": "AssemblyAI STT",
             "tts_engine": settings.TTS_PROVIDER
         }
+
     }

@@ -1,4 +1,8 @@
 import os
+from dotenv import load_dotenv
+
+# Load backend/.env file
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"))
 
 class Settings:
     PROJECT_NAME: str = "Sahayak AI Backend"
@@ -7,11 +11,11 @@ class Settings:
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./sahayak.db")
 
-    OLLAMA_BASE_URL: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-    OLLAMA_MODEL: str = os.getenv("OLLAMA_MODEL", "qwen3.5")
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    ASSEMBLYAI_API_KEY: str = os.getenv("ASSEMBLYAI_API_KEY", "")
 
     STT_MODEL: str = os.getenv("STT_MODEL", "small")
-    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "gtts")
+    TTS_PROVIDER: str = os.getenv("TTS_PROVIDER", "edge-tts")
 
     ESP32_API_KEY: str = os.getenv("ESP32_API_KEY", "sahayak_secret_esp32_key_2026")
 
@@ -22,3 +26,4 @@ class Settings:
     ]
 
 settings = Settings()
+

@@ -10,7 +10,19 @@ from app.core.llm_config import llm_config
 
 logger = logging.getLogger("sahayak.llm")
 
-REFUSAL_MESSAGE = "I could not find sufficient verified information in the official Sahayak AI knowledge base."
+REFUSAL_MESSAGES = {
+    "en": "I could not find sufficient verified information in the official Sahayak AI knowledge base.",
+    "hi": "मुझे आधिकारिक सहायक एआई ज्ञान आधार में पर्याप्त सत्यापित जानकारी नहीं मिली।",
+    "ta": "அதிகாரப்பூர்வ சகாயக் AI அறிவுத் தளத்தில் போதுமான சரிபார்க்கப்பட்ட தகவல்களை என்னால் கண்டுபிடிக்க முடியவில்லை.",
+    "te": "అధికారిక సహాయక్ AI నాలెడ్జ్ బేస్‌లో తగినంత ధృవీకరించబడిన సమాచారం مجھے లభించలేదు.",
+    "kn": "ಅಧಿಕೃತ ಸಹಾಯಕ್ AI ಜ್ಞಾನ ನೆಲೆ ಯಲ್ಲಿ ಸಾಕಷ್ಟು ಪರಿಶೀಲಿಸಿದ ಮಾಹಿತಿ ನನಗೆ ಕಂಡುಬರಲಿಲ್ಲ.",
+    "mr": "मला अधिकृत सहाय्यक AI ज्ञानकोशात पुरेशी पडताळलेली माहिती आढळली नाही.",
+    "bn": "আমি অফিসিয়াল সহায়ক এআই জ্ঞান ভাণ্ডারে পর্যাপ্ত যাচাইকৃত তথ্য খুঁজে পাইনি।",
+    "gu": "મને સત્તાવાર સહાયક AI જ્ઞાન આધારમાં પૂરતી ચકાસવામાં આવેલી માહિતી મળી નથી.",
+    "ml": "ഔദ്യോഗിക സഹായക് എഐ വിജ്ഞാന ശേഖരത്തിൽ ആവശ്യമായ സ്ഥിരീകരിച്ച വിവരങ്ങൾ കണ്ടെത്താനായില്ല.",
+    "pa": "ਮੈਨੂੰ ਅਧਿਕਾਰਤ ਸਹਾਇਕ AI ਗਿਆਨ ਕੋਸ਼ ਵਿੱਚ ਲੋੜੀਂਦੀ ਤਸਦੀਕਸ਼ੁਦਾ ਜਾਣਕਾਰੀ ਨਹੀਂ ਮਿਲੀ।",
+    "or": "ମୁଁ ଅଫିସିଆଲ୍ ସହାୟକ AI ଜ୍ଞାନ ଆଧାରରେ ଯଥେଷ୍ଟ ଯାଞ୍ଚ ହୋଇଥିବା ସୂଚନା ପାଇପାରିଲି ନାହିଁ।"
+}
 
 # Language map for precise prompt instructions
 LANGUAGE_NAMES = {
@@ -41,13 +53,17 @@ class LLMService:
         Accepts structured context list from RAGService or manual test context.
         Uses Gemini API as sole LLM generator.
         """
+        lang = original_language.lower() if original_language else "en"
+        refusal = REFUSAL_MESSAGES.get(lang, REFUSAL_MESSAGES["en"])
+
         if not context:
             return {
-                "answer": REFUSAL_MESSAGE,
+                "answer": refusal,
                 "sources": [],
                 "confidence": 0.0,
                 "insufficient_evidence": True
             }
+
 
         context_text = "\n\n".join([
             f"Document: {chunk.get('title', 'Official Document')}\n"
