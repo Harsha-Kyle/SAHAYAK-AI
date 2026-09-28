@@ -1,0 +1,52 @@
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Tamil:wght@400;500;600;700&family=Noto+Sans+Telugu:wght@400;500;600;700&family=Noto+Sans+Kannada:wght@400;500;600;700&family=Noto+Sans+Malayalam:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap');
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+/* Root size drives every rem token: Easy Mode and kiosk scale the whole UI. */
+html {
+  font-size: 16px;
+}
+html[data-kiosk='true'] {
+  font-size: 19px;
+}
+html[data-easy='true'] {
+  font-size: 20px;
+}
+html[data-easy='true'][data-kiosk='true'] {
+  font-size: 22px;
+}
+body {
+  @apply bg-surface font-sans text-body text-ink antialiased;
+}
+/* Easy Mode — higher contrast */
+html[data-easy='true'] .text-muted {
+  color: theme('colors.ink');
+}
+html[data-easy='true'] .border-line {
+  border-color: theme('colors.muted');
+}
+/* Visible navy focus everywhere */
+:focus-visible {
+  outline: 3px solid theme('colors.navy.DEFAULT');
+  outline-offset: 3px;
+}
+@layer components {
+  .page-container {
+    @apply mx-auto w-full max-w-6xl px-4 md:px-8 kiosk:max-w-7xl kiosk:px-12;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
