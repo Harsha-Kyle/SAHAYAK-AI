@@ -12,27 +12,30 @@ async def chat_endpoint(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Message query cannot be empty.")
 
-    # 1. Detect language if default
+    # 1. Detect language if not provided
     detected_lang = request.language or language_service.detect_language(request.message)
 
-    # 2. Retrieve official RAG context chunks
-    context_chunks, score = rag_service.retrieve_context(request.message)
+    # 2. Retrieve official RAG context using standard search contract
+    rag_result = rag_service.search(query=request.message, language=detected_lang)
+    context_chunks = rag_result.get("results", [])
+    score = rag_result.get("retrieval_confidence", 0.0)
 
     # 3. Build structured document citations
     citations = citation_service.build_citations(context_chunks)
 
-    # 4. Generate grounded LLM response (or refusal if context insufficient)
-    answer = await llm_service.generate_answer(
+    # 4. Generate grounded LLM response using Gemini API / Ollama
+    result = await llm_service.generate(
         query=request.message,
-        context_chunks=context_chunks,
-        confidence_score=score,
-        language=detected_lang
+        context=context_chunks,
+        original_language=detected_lang
     )
 
     return ChatResponse(
-        answer=answer,
+        answer=result.get("answer", ""),
         language=detected_lang,
-        sources=citations,
-        confidence=round(score, 2),
+        sources=citations if citations else result.get("sources", []),
+        confidence=round(result.get("confidence", score), 2),
         session_id=request.session_id or "default_session"
     )
+
+

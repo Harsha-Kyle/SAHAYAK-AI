@@ -1,8 +1,8 @@
+import asyncio
 import pytest
 from app.services.llm_service import llm_service
 
-@pytest.mark.asyncio
-async def test_llm_service_contract_with_manual_context():
+def test_llm_service_contract_with_manual_context():
     manual_context = [
         {
             "content": "PM-KISAN provides income support of ₹6,000 per year for farmer families.",
@@ -14,10 +14,10 @@ async def test_llm_service_contract_with_manual_context():
         }
     ]
 
-    result = await llm_service.generate(
+    result = asyncio.run(llm_service.generate(
         query="What is PM-KISAN?",
         context=manual_context
-    )
+    ))
 
     assert isinstance(result, dict)
     assert "answer" in result
@@ -25,3 +25,4 @@ async def test_llm_service_contract_with_manual_context():
     assert "confidence" in result
     assert "insufficient_evidence" in result
     assert len(result["sources"]) > 0
+
