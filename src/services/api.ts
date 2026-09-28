@@ -56,6 +56,61 @@ export async function sendChatMessage(
   return res.json();
 }
 
+export interface VoiceApiResponse {
+  query: string;
+  answer: string;
+  language: string;
+  sources: ChatSource[];
+  confidence: number;
+  has_audio: boolean;
+}
+
+/**
+ * POST /api/voice
+ * Sends recorded audio blob (WAV/WebM) to AssemblyAI STT → RAG → Gemini → TTS pipeline.
+ */
+export async function sendVoiceQuery(
+  audioBlob: Blob,
+  language = 'en'
+): Promise<VoiceApiResponse> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'speech.wav');
+  formData.append('language', language);
+
+  const res = await fetch(`${BACKEND_URL}/api/voice`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Voice API error ${res.status}: ${detail}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * POST /api/transcribe
+ * Sends audio blob to AssemblyAI STT and returns transcribed text + language.
+ */
+export async function transcribeAudio(
+  audioBlob: Blob,
+  language?: string
+): Promise<{ text: string; language: string }> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'speech.wav');
+  if (language) formData.append('language', language);
+
+  const res = await fetch(`${BACKEND_URL}/api/transcribe`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) throw new Error(`Transcribe API error ${res.status}`);
+  return res.json();
+}
+
 // ─── Health Check ─────────────────────────────────────────────────────────────
 
 export async function checkBackendHealth(): Promise<boolean> {
@@ -88,3 +143,4 @@ export async function synthesizeSpeech(text: string, language = 'en'): Promise<s
   const blob = await res.blob();
   return URL.createObjectURL(blob);
 }
+

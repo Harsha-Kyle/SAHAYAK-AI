@@ -7,7 +7,8 @@ import { ListenButton } from '../components/assistant/ListenButton';
 import { useApp, useL, useT } from '../contexts/AppContext';
 import { answers } from '../data/answers';
 import { useSpeech } from '../hooks/useSpeech';
-import { sendChatMessage, ChatSource } from '../services/api';
+import { sendChatMessage, sendVoiceQuery, ChatSource } from '../services/api';
+
 import { Answer, ModuleId } from '../types/app';
 import { getLanguage } from '../utils/lookup';
 
@@ -100,21 +101,96 @@ export function Chatbot() {
     };
   }, [messages]);
 
-  const startListening = () => {
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const startListening = async () => {
     stop();
-    setIsListening(true);
     resetIdleTimer();
-    if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
-    voiceTimerRef.current = window.setTimeout(() => {
+    audioChunksRef.current = [];
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks in the stream
+        stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+        if (audioBlob.size === 0) return;
+
+        setIsThinking(true);
+        try {
+          // Send recorded voice to AssemblyAI backend
+          const result = await sendVoiceQuery(audioBlob, language);
+          setIsThinking(false);
+
+          if (result.query) {
+            // Show transcribed user question
+            const userMsg: ChatMessage = {
+              id: `user-${Date.now()}`,
+              sender: 'user',
+              text: result.query,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+
+            const aiMsg: ChatMessage = {
+              id: `ai-${Date.now()}`,
+              sender: 'ai',
+              apiAnswer: result.answer,
+              apiSources: result.sources,
+              apiConfidence: result.confidence,
+              apiLanguage: result.language,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            };
+
+            setMessages((prev) => [...prev, userMsg, aiMsg]);
+            recordQueryInSession({
+              question: result.query,
+              answerTitle: result.answer.substring(0, 60),
+              module: 'schemes',
+            });
+          }
+        } catch (err) {
+          console.error('Voice transcription error:', err);
+          setIsThinking(false);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `ai-err-${Date.now()}`,
+              sender: 'ai',
+              apiError: true,
+              apiAnswer: 'Failed to process voice input. Please try typing or speak clearly.',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.warn('Microphone access refused or not available, fallback to text prompt:', err);
+      // Fallback if browser mic permission denied
       handleUserSubmit('Am I eligible for PM-KISAN money?', 'schemes');
-      setIsListening(false);
-    }, 3200);
+    }
   };
 
   const stopListening = () => {
-    if (voiceTimerRef.current) clearTimeout(voiceTimerRef.current);
     setIsListening(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
   };
+
 
   const handleUserSubmit = async (queryText: string, forcedModule?: ModuleId) => {
     if (!queryText.trim()) return;

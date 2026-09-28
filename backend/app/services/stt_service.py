@@ -1,36 +1,59 @@
-import io
+import os
+import tempfile
 import logging
-from app.core.config import settings
+from typing import Tuple
 
 logger = logging.getLogger("sahayak.stt")
 
 class STTService:
     def __init__(self):
-        self.model = None
+        self.api_key = os.getenv("ASSEMBLYAI_API_KEY", "")
 
-    def _load_model(self):
-        if self.model is None:
+    def transcribe_audio(self, audio_bytes: bytes, language: str = None) -> Tuple[str, str]:
+        """
+        Transcribe raw audio bytes using AssemblyAI SDK.
+        Supports automatic language detection across Indian languages.
+        """
+        if not self.api_key:
+            logger.warning("ASSEMBLYAI_API_KEY not configured. Returning fallback transcription.")
+            return "Am I eligible for PM-KISAN money?", (language or "en")
+
+        try:
+            import assemblyai as aai
+            aai.settings.api_key = self.api_key
+
+            # Write audio bytes to temporary file for AssemblyAI SDK
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+                temp_audio.write(audio_bytes)
+                temp_path = temp_audio.name
+
             try:
-                from faster_whisper import WhisperModel
-                logger.info(f"Loading Whisper STT model: {settings.STT_MODEL}")
-                self.model = WhisperModel(settings.STT_MODEL, device="cpu", compute_type="int8")
-            except Exception as e:
-                logger.warning(f"Whisper STT model failed to load ({e}). Using fallback transcription.")
+                config = aai.TranscriptionConfig(
+                    language_detection=True if not language else False,
+                    language_code=language if language and language != "auto" else None
+                )
 
-    def transcribe_audio(self, audio_bytes: bytes, language: str = None) -> tuple[str, str]:
-        """Transcribe raw audio bytes into text and detected language."""
-        self._load_model()
-        if self.model:
-            try:
-                audio_file = io.BytesIO(audio_bytes)
-                segments, info = self.model.transcribe(audio_file, language=language)
-                text = " ".join([segment.text for segment in segments]).strip()
-                detected_lang = info.language if info else (language or "en")
-                return text, detected_lang
-            except Exception as e:
-                logger.error(f"Error in Whisper STT transcription: {e}")
+                transcriber = aai.Transcriber()
+                transcript = transcriber.transcribe(temp_path, config=config)
 
-        # Fallback transcription when Whisper is unavailable
-        return "Am I eligible for PM-KISAN money?", (language or "en")
+                if transcript.status == aai.TranscriptStatus.error:
+                    logger.error(f"AssemblyAI transcription error: {transcript.error}")
+                    return "Am I eligible for PM-KISAN money?", (language or "en")
+
+                text = transcript.text or ""
+                # AssemblyAI language detection code
+                detected_lang = getattr(transcript, "language_code", language or "en") or "en"
+
+                logger.info(f"AssemblyAI STT Success: '{text[:50]}...' (Language: {detected_lang})")
+                return text.strip(), detected_lang
+
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
+        except Exception as e:
+            logger.error(f"AssemblyAI STT Exception: {e}")
+            return "Am I eligible for PM-KISAN money?", (language or "en")
 
 stt_service = STTService()
+
