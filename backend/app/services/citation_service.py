@@ -8,11 +8,11 @@ class CitationService:
         seen = set()
         for chunk in retrieved_chunks:
             meta = chunk.get("metadata", {})
-            title = meta.get("title", "Official Document")
-            page = chunk.get("page_number", 1)
-            domain = meta.get("domain", "General")
-            source_url = meta.get("source_url")
-            score = float(chunk.get("similarity_score", 0.85))
+            title = chunk.get("title") or meta.get("title", "Official Document")
+            page = chunk.get("page") or chunk.get("page_number", 1)
+            domain = chunk.get("domain") or meta.get("domain", "General")
+            source_url = chunk.get("source_url") or meta.get("source_url")
+            score = float(chunk.get("confidence") or chunk.get("similarity_score", 0.85))
 
             key = f"{title}_{page}"
             if key not in seen:
